@@ -1,0 +1,593 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>活动随机分组系统</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+SC:wght@400;500;700&display=swap');
+        
+        body {
+            font-family: 'Noto Sans SC', system-ui, -apple-system, sans-serif;
+            background: linear-gradient(135deg, #f6f8fc 0%, #e9f0f8 100%);
+            min-height: 100vh;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: all 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.15);
+        }
+
+        .suggestions {
+            position: absolute;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #e2e8f0;
+            border-radius: 0.75rem;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            z-index: 10;
+            scrollbar-width: thin;
+            scrollbar-color: #cbd5e0 #f7fafc;
+        }
+
+        .suggestions::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .suggestions::-webkit-scrollbar-track {
+            background: #f7fafc;
+            border-radius: 3px;
+        }
+
+        .suggestions::-webkit-scrollbar-thumb {
+            background-color: #cbd5e0;
+            border-radius: 3px;
+        }
+
+        .suggestion-item {
+            padding: 0.75rem 1rem;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .suggestion-item:hover {
+            background-color: #f3f4f6;
+            color: #2563eb;
+        }
+
+        .input-group {
+            position: relative;
+            transition: all 0.3s ease;
+        }
+
+        .input-group:focus-within {
+            transform: translateY(-2px);
+        }
+
+        .fancy-input {
+            transition: all 0.3s ease;
+            border: 2px solid transparent;
+        }
+
+        .fancy-input:focus {
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.1);
+        }
+
+        .submit-button {
+            transition: all 0.3s ease;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .submit-button::before {
+            content: '';
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            width: 100%;
+            height: 100%;
+            background: rgba(255, 255, 255, 0.2);
+            transform: translate(-50%, -50%) scale(0);
+            border-radius: 50%;
+            transition: transform 0.5s ease;
+        }
+
+        .submit-button:hover::before {
+            transform: translate(-50%, -50%) scale(2);
+        }
+
+        .main-title {
+            background: linear-gradient(45deg, #1d4ed8, #3b82f6);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            font-size: 2.5rem;
+            font-weight: bold;
+            letter-spacing: 0.2em;
+            animation: glow 2s ease-in-out infinite alternate;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.1);
+        }
+
+        .sub-title {
+            font-size: 2rem;
+            font-weight: bold;
+            color: #1e3a8a;
+            opacity: 0.9;
+            margin-top: 1rem;
+        }
+
+        @keyframes glow {
+            from {
+                text-shadow: 0 0 10px rgba(59, 130, 246, 0.2);
+            }
+            to {
+                text-shadow: 0 0 20px rgba(59, 130, 246, 0.4);
+            }
+        }
+
+        .group-result {
+            background: linear-gradient(to bottom, #ffffff, #f8fafc);
+            border: 1px solid rgba(226, 232, 240, 0.8);
+            transition: all 0.3s ease;
+            min-width: 120px;
+        }
+
+        .group-result:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 12px 20px rgba(0, 0, 0, 0.1);
+        }
+
+        #groupsContainer {
+            display: flex;
+            justify-content: space-between;
+            width: 100%;
+            overflow: visible;
+        }
+
+        .leader-badge {
+            display: inline-block;
+            background: linear-gradient(45deg, #3b82f6, #1d4ed8);
+            padding: 0 4px;
+            border-radius: 8px;
+            color: white;
+            animation: badgeGlow 1.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes badgeGlow {
+            from {
+                box-shadow: 0 0 5px rgba(59, 130, 246, 0.3);
+            }
+            to {
+                box-shadow: 0 0 10px rgba(59, 130, 246, 0.6);
+            }
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+    <div class="max-w-7xl mx-auto">
+        <!-- 标题区域 -->
+        <div class="text-center mb-16">
+            <h1 class="main-title mb-4">凝心聚力，共赴新程</h1>
+            <div class="sub-title">活动随机分组</div>
+        </div>
+
+        <!-- 主要内容区域 -->
+        <div class="card rounded-2xl p-8 mb-8" id="formPage">
+            <form id="drawForm" class="space-y-6">
+                <!-- 姓名输入区域 -->
+                <div class="mb-6">
+                    <div class="flex">
+                        <div class="relative flex-1">
+                            <input
+                                type="text"
+                                id="nameInput"
+                                class="w-full px-4 py-3 border-2 border-gray-200 rounded-l-xl focus:outline-none focus:border-blue-500 transition-colors fancy-input"
+                                placeholder="请输入姓名"
+                                autocomplete="off"
+                            >
+                            <div id="suggestions" class="suggestions hidden"></div>
+                        </div>
+                        <button
+                            type="button"
+                            id="dropdownButton"
+                            class="px-4 bg-gray-100 border-2 border-l-0 border-gray-200 rounded-r-xl hover:bg-gray-200 transition-colors"
+                        >
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-600" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clip-rule="evenodd" />
+                            </svg>
+                        </button>
+                    </div>
+                </div>
+
+                <!-- 错误信息 -->
+                <div id="errorMessage" class="text-red-500 text-sm mb-4 hidden"></div>
+
+                <!-- 分组按钮 -->
+                <button 
+                    type="submit"
+                    id="submitButton"
+                    class="w-full bg-gradient-to-r from-blue-600 to-blue-700 text-white py-3 px-6 rounded-xl font-bold text-lg hover:from-blue-700 hover:to-blue-800 transition-all duration-300 disabled:opacity-50 disabled:cursor-not-allowed shadow-lg hover:shadow-xl"
+                    disabled
+                >
+                    分组
+                </button>
+            </form>
+        </div>
+
+        <!-- 结果显示页面 -->
+        <div id="resultsPage" class="card rounded-2xl p-8 hidden">
+            <h2 class="text-2xl font-bold text-center mb-8">分组结果</h2>
+            <div id="groupsContainer" class="flex justify-between w-full gap-2"></div>
+        </div>
+    </div>
+<script>
+        const departmentMembers = {
+            '电学一部一组': ['王浩宇', '姚明松', '徐建铭', '周赢国', '王海迪', '胡国天', '宋一平'],
+            '电学一部二组': ['丰行', '涂颖', '何亚琴', '李寒阳', '徐祎杨'],
+            '电学一部三组': ['张金玲', '金超', '李亮', '占晴芳'],
+            '电学三部': ['万培', '刘顺', '崔富棋', '黄婧婷', '吴冯颂', '张诗雨', '平威', '陈娇', '张思佳', '陶叙贝', '雷康达', '范玲', '黎明', '董德', '魏冰焱', '王苗'],
+            '人资财经行政组': ['宋怡萍', '刘珂珂', '吴文波', '王玉丽']
+        };
+
+        let groups = JSON.parse(localStorage.getItem('drawLotsGroups')) || [[], [], [], [], [], [], []];
+        let selectedName = '';
+        let selectedDepartment = '';
+
+        // 检查是否所有36人都已分组
+        function isAllMembersGrouped() {
+            const totalMembers = groups.flat().length;
+            return totalMembers === 36;
+        }
+
+        // 获取所有人员名单
+        function getAllNames() {
+            return Object.values(departmentMembers).flat();
+        }
+
+        // 显示所有姓名
+        function showAllNames() {
+            const allNames = getAllNames();
+            const suggestionsDiv = document.getElementById('suggestions');
+            suggestionsDiv.innerHTML = '';
+            
+            allNames.forEach(name => {
+                const div = document.createElement('div');
+                div.className = 'suggestion-item';
+                div.textContent = name;
+                div.onclick = () => selectName(name);
+                suggestionsDiv.appendChild(div);
+            });
+            
+            suggestionsDiv.classList.remove('hidden');
+        }
+
+        // 获取人员所属部门
+        function getDepartmentByName(name) {
+            for (const [dept, members] of Object.entries(departmentMembers)) {
+                if (members.includes(name)) {
+                    return dept;
+                }
+            }
+            return '';
+        }
+
+        // 检查用户是否已经分组
+        function checkIfAlreadyGrouped(name) {
+            return groups.flat().some(member => member.name === name);
+        }
+
+        // 显示错误信息
+        function showError(message) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = message;
+            errorDiv.classList.remove('hidden');
+        }
+
+        // 隐藏错误信息
+        function hideError() {
+            document.getElementById('errorMessage').classList.add('hidden');
+        }
+
+        // 根据输入筛选姓名建议
+        function filterNames(input) {
+            const allNames = Object.values(departmentMembers).flat();
+            return allNames.filter(name => 
+                name.toLowerCase().includes(input.toLowerCase())
+            );
+        }
+
+        // 显示姓名建议
+        function showSuggestions(suggestions) {
+            const suggestionsDiv = document.getElementById('suggestions');
+            suggestionsDiv.innerHTML = '';
+            
+            if (suggestions.length > 0) {
+                suggestions.forEach(name => {
+                    const div = document.createElement('div');
+                    div.className = 'suggestion-item';
+                    div.textContent = name;
+                    div.onclick = () => selectName(name);
+                    suggestionsDiv.appendChild(div);
+                });
+                suggestionsDiv.classList.remove('hidden');
+            } else {
+                suggestionsDiv.classList.add('hidden');
+            }
+        }
+
+        // 选择姓名
+        function selectName(name) {
+            const nameInput = document.getElementById('nameInput');
+            const suggestionsDiv = document.getElementById('suggestions');
+            const submitButton = document.getElementById('submitButton');
+            
+            nameInput.value = name;
+            selectedName = name;
+            selectedDepartment = getDepartmentByName(name);
+            suggestionsDiv.classList.add('hidden');
+            submitButton.disabled = false;
+
+            if (checkIfAlreadyGrouped(name)) {
+                togglePages(true);
+                updateResults();
+                startDataSync();
+            }
+        }
+
+        // 获取当前总人数
+        function getTotalGroupedCount() {
+            return groups.flat().length;
+        }
+
+        // 获取部门在特定组的人数
+        function getDepartmentCountInGroup(groupIndex, department) {
+            return groups[groupIndex].filter(member => member.department === department).length;
+        }
+
+        // 选择组长
+        function selectGroupLeader(group) {
+            if (!group || group.length === 0) return group;
+            
+            // 如果已经有组长了，直接返回
+            if (group.some(member => member.isLeader)) return group;
+            
+            // 随机选择一个组员作为组长
+            const leaderIndex = Math.floor(Math.random() * group.length);
+            const updatedGroup = [...group];
+            updatedGroup[leaderIndex] = { ...updatedGroup[leaderIndex], isLeader: true };
+            
+            // 将组长移到第一位
+            const leader = updatedGroup[leaderIndex];
+            updatedGroup.splice(leaderIndex, 1);
+            updatedGroup.unshift(leader);
+            
+            return updatedGroup;
+        }
+
+        // 找到合适的组
+        function findSuitableGroup(department) {
+            const totalCount = getTotalGroupedCount();
+            let groupIndex;
+
+            if (totalCount < 14) {
+                // 前14人随机分配到还未满2人的组
+                const availableGroups = [];
+                groups.forEach((group, index) => {
+                    if (group.length < 2) {
+                        availableGroups.push(index);
+                    }
+                });
+                
+                // 随机选择一个可用的组
+                const randomIndex = Math.floor(Math.random() * availableGroups.length);
+                groupIndex = availableGroups[randomIndex];
+            } else if (totalCount < 35) {
+                // 第15-35人分配到合适的组（每组不超过5人）
+                const suitableGroups = groups
+                    .map((group, index) => ({ group, index }))
+                    .filter(({ group }) => {
+                        // 检查该组是否未满5人且不违反部门人数限制
+                        return group.length < 5 && 
+                               getDepartmentCountInGroup(groups.indexOf(group), department) < 2;
+                    });
+
+                if (suitableGroups.length > 0) {
+                    // 随机选择一个合适的组
+                    const randomIndex = Math.floor(Math.random() * suitableGroups.length);
+                    groupIndex = suitableGroups[randomIndex].index;
+                } else {
+                    // 如果找不到完全合适的组，选择违反限制最少的组
+                    let minViolations = Infinity;
+                    let bestGroup = -1;
+
+                    groups.forEach((group, index) => {
+                        if (group.length >= 5) return; // 跳过已满5人的组
+                        
+                        const deptCount = getDepartmentCountInGroup(index, department);
+                        if (deptCount < minViolations) {
+                            minViolations = deptCount;
+                            bestGroup = index;
+                        }
+                    });
+
+                    groupIndex = bestGroup;
+                }
+            } else {
+                // 最后一人分配到同部门人数最少的组
+                let minDeptCount = Infinity;
+                let minDeptGroup = -1;
+                
+                groups.forEach((group, index) => {
+                    const deptCount = getDepartmentCountInGroup(index, department);
+                    if (deptCount < minDeptCount) {
+                        minDeptCount = deptCount;
+                        minDeptGroup = index;
+                    }
+                });
+                
+                groupIndex = minDeptGroup;
+            }
+
+            return groupIndex;
+        }
+
+        // 更新结果显示
+        function updateResults() {
+            const container = document.getElementById('groupsContainer');
+            container.innerHTML = '';
+            
+            // 检查是否是第36人刚刚分组完成
+            const isJustCompleted = groups.flat().length === 36 && !localStorage.getItem('leadersSelected');
+            
+            // 如果是第36人刚刚分组完成，为每个组选择组长
+            if (isJustCompleted) {
+                groups = groups.map(group => selectGroupLeader(group));
+                localStorage.setItem('drawLotsGroups', JSON.stringify(groups));
+                localStorage.setItem('leadersSelected', 'true');
+            }
+
+            groups.forEach((group, index) => {
+                const groupDiv = document.createElement('div');
+                groupDiv.className = 'w-[calc(100%/7-0.5rem)] group-result bg-white rounded-xl p-3 shadow-md hover:shadow-lg transition-shadow duration-300';
+                groupDiv.innerHTML = `
+                    <h3 class="text-base font-bold mb-3 text-center text-blue-800 border-b pb-2">第${index + 1}组</h3>
+                    <ul class="space-y-2">
+                        ${group.map(member => `
+                            <li class="flex items-center justify-center text-gray-700 py-1">
+                                <span class="text-center text-sm whitespace-nowrap">
+                                    ${member.name}${member.isLeader ? '<span class="leader-badge text-xs ml-1">组长</span>' : ''}
+                                </span>
+                            </li>
+                        `).join('')}
+                    </ul>
+                `;
+                container.appendChild(groupDiv);
+            });
+        }
+
+        // 切换页面显示
+        function togglePages(showResults) {
+            document.getElementById('formPage').classList.toggle('hidden', showResults);
+            document.getElementById('resultsPage').classList.toggle('hidden', !showResults);
+        }
+
+        // 定期检查数据更新
+        function startDataSync() {
+            setInterval(() => {
+                const newGroups = JSON.parse(localStorage.getItem('drawLotsGroups')) || [[], [], [], [], [], [], []];
+                if (JSON.stringify(groups) !== JSON.stringify(newGroups)) {
+                    groups = newGroups;
+                    updateResults();
+                }
+            }, 1000);
+        }
+
+        // 初始化页面
+        document.addEventListener('DOMContentLoaded', () => {
+            const nameInput = document.getElementById('nameInput');
+            const submitButton = document.getElementById('submitButton');
+            const dropdownButton = document.getElementById('dropdownButton');
+            const suggestionsDiv = document.getElementById('suggestions');
+            const drawForm = document.getElementById('drawForm');
+
+            submitButton.disabled = true;
+
+            // 下拉按钮点击事件
+            dropdownButton.addEventListener('click', (e) => {
+                e.preventDefault();
+                if (suggestionsDiv.classList.contains('hidden')) {
+                    showAllNames();
+                } else {
+                    suggestionsDiv.classList.add('hidden');
+                }
+            });
+
+            nameInput.addEventListener('input', (e) => {
+                const input = e.target.value.trim();
+                if (input) {
+                    const suggestions = filterNames(input);
+                    showSuggestions(suggestions);
+                } else {
+                    suggestionsDiv.classList.add('hidden');
+                    selectedName = '';
+                    selectedDepartment = '';
+                    submitButton.disabled = true;
+                }
+            });
+
+            document.addEventListener('click', (e) => {
+                if (!e.target.closest('#nameInput') && 
+                    !e.target.closest('#suggestions') && 
+                    !e.target.closest('#dropdownButton')) {
+                    suggestionsDiv.classList.add('hidden');
+                }
+            });
+
+            // 表单提交事件
+            drawForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                hideError();
+
+                if (!selectedName || !selectedDepartment) {
+                    showError('请选择有效的姓名');
+                    return;
+                }
+
+                if (checkIfAlreadyGrouped(selectedName)) {
+                    togglePages(true);
+                    updateResults();
+                    startDataSync();
+                    return;
+                }
+
+                const groupIndex = findSuitableGroup(selectedDepartment);
+                if (groupIndex === -1) {
+                    showError('无法找到合适的分组，请稍后再试');
+                    return;
+                }
+
+                groups[groupIndex].push({
+                    name: selectedName,
+                    department: selectedDepartment,
+                    timestamp: Date.now(),
+                    isLeader: false
+                });
+                
+                // 判断是否是第36人
+                const totalMembers = groups.flat().length;
+                if (totalMembers === 36) {
+                    // 清除之前的组长选择标记（如果有）
+                    localStorage.removeItem('leadersSelected');
+                }
+                
+                localStorage.setItem('drawLotsGroups', JSON.stringify(groups));
+                updateResults();
+                togglePages(true);
+                startDataSync();
+            });
+
+            // 如果已经有组长选择记录，确保显示正确的组长
+            if (localStorage.getItem('leadersSelected') && isAllMembersGrouped()) {
+                groups = groups.map(group => {
+                    if (!group.some(member => member.isLeader)) {
+                        return selectGroupLeader(group);
+                    }
+                    return group;
+                });
+                localStorage.setItem('drawLotsGroups', JSON.stringify(groups));
+            }
+        });
+    </script>
+</body>
+</html>
